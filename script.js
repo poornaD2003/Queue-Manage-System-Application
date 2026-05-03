@@ -157,7 +157,7 @@ function initializeGoogleSignIn() {
             {
                 theme: 'filled_blue',
                 size: 'large',
-                width: '100%',
+                width: 300,
                 text: 'signin_with'
             }
         );
@@ -254,6 +254,25 @@ async function initScanner() {
 
     initScannerElements();
 
+    // Check if Html5Qrcode library is loaded
+    if (typeof Html5Qrcode === 'undefined') {
+        console.error("Html5Qrcode library not loaded!");
+        if (scanResultBox) {
+            scanResultBox.textContent = "❌ QR Code library not loaded. Please refresh the page.";
+        }
+        return;
+    }
+
+    // Verify reader element exists
+    const readerElement = document.getElementById('reader');
+    if (!readerElement) {
+        console.error("Reader element not found!");
+        if (scanResultBox) {
+            scanResultBox.textContent = "❌ Camera container not found. Please refresh the page.";
+        }
+        return;
+    }
+
     // Check camera permission first
     const hasPermission = await checkCameraPermission();
     if (!hasPermission) {
@@ -269,33 +288,74 @@ async function initScanner() {
             fps: 10,
             qrbox: { width: 250, height: 250 },
             rememberLastUsedCamera: true,
-            aspectRatio: 1.0
+            aspectRatio: 1.0,
+            disableFlip: false
         };
 
-        // Start the scanner with environment camera
-        await html5QrCode.start(
-            { facingMode: { ideal: "environment" } },
-            config,
-            onScanSuccess,
-            onScanFailure
-        );
+        // Try to start scanner with environment camera, fall back to any camera
+        let scannerStarted = false;
+        try {
+            // First try: environment (rear) camera
+            console.log("Attempting to start scanner with environment camera...");
+            await html5QrCode.start(
+                { facingMode: "environment" },
+                config,
+                onScanSuccess,
+                onScanFailure
+            );
+            scannerStarted = true;
+        } catch (envErr) {
+            console.warn("Environment camera failed, trying user (front) camera:", envErr);
+            try {
+                // Second try: user (front) camera
+                await html5QrCode.start(
+                    { facingMode: "user" },
+                    config,
+                    onScanSuccess,
+                    onScanFailure
+                );
+                scannerStarted = true;
+            } catch (userErr) {
+                console.warn("User camera failed, trying any available camera:", userErr);
+                try {
+                    // Third try: any available camera without constraints
+                    await html5QrCode.start(
+                        { video: true },
+                        config,
+                        onScanSuccess,
+                        onScanFailure
+                    );
+                    scannerStarted = true;
+                } catch (anyErr) {
+                    throw anyErr;
+                }
+            }
+        }
 
-        scannerActive = true;
-        console.log("QR Scanner started successfully");
-        if (scanResultBox) {
-            scanResultBox.textContent = "📷 Camera active - scan a QR code";
-            scanResultBox.style.borderColor = "var(--accent)";
+        if (scannerStarted) {
+            scannerActive = true;
+            console.log("QR Scanner started successfully");
+            if (scanResultBox) {
+                scanResultBox.textContent = "📷 Camera active - scan a QR code";
+                scanResultBox.style.borderColor = "var(--accent)";
+            }
         }
     } catch (err) {
         console.error("Error starting scanner:", err);
+        console.error("Error name:", err.name);
+        console.error("Full error:", JSON.stringify(err));
         scannerActive = false;
         if (scanResultBox) {
-            if (err.toString().includes("Permission denied")) {
-                scanResultBox.textContent = "❌ Camera permission required";
+            if (err.toString().includes("Permission denied") || err.name === "NotAllowedError") {
+                scanResultBox.textContent = "❌ Camera permission required. Allow in browser settings.";
             } else if (err.toString().includes("OverconstrainedError")) {
-                scanResultBox.textContent = "❌ Camera not compatible. Try using the rear camera.";
+                scanResultBox.textContent = "❌ Camera constraints not supported. Try another device or browser.";
+            } else if (err.name === "NotFoundError") {
+                scanResultBox.textContent = "❌ No camera found. Check hardware.";
+            } else if (err.name === "NotReadableError") {
+                scanResultBox.textContent = "❌ Camera busy. Close other apps using camera.";
             } else {
-                scanResultBox.textContent = "❌ Error: " + err.message;
+                scanResultBox.textContent = "❌ Error: " + (err.message || err.toString());
             }
         }
     }
