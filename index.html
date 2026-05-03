@@ -8,11 +8,15 @@
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
     <!-- QR Code scanning -->
-    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://unpkg.com/html5-qrcode@1.0.46/minified/html5-qrcode.min.js"></script>
     <!-- Google Sign-In -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
     <!-- JWT Decode -->
     <script src="https://cdn.jsdelivr.net/npm/jwt-decode@4.0.0/build/jwt-decode.js"></script>
+    <!-- Firebase Compat (works with script tags) -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
 </head>
 
 <body>
@@ -25,11 +29,6 @@
             </header>
 
             <form id="login-form" class="login-form">
-                <div class="form-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" placeholder="Enter your username" required>
-                </div>
-
                 <div class="form-group">
                     <label for="email">Email</label>
                     <input type="email" id="email" placeholder="Enter your email" required>
