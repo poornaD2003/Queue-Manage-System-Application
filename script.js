@@ -1,429 +1,213 @@
 // --- Firebase Configuration ---
-// Replace with your Firebase config from Firebase Console
 const firebaseConfig = {
-   apiKey: "AIzaSyA0RZ_9PjrRMjcGoYUvEKlZeGtGQbDbBEg",
-  authDomain: "queue-manage-653af.firebaseapp.com",
-  projectId: "queue-manage-653af",
-  storageBucket: "queue-manage-653af.firebasestorage.app",
-  messagingSenderId: "327457406558",
-  appId: "1:327457406558:web:c6d71a24bb7485e5e0fecf",
-  measurementId: "G-2XZP32T69P"
+    apiKey: "AIzaSyA0RZ_9PjrRMjcGoYUvEKlZeGtGQbDbBEg",
+    authDomain: "queue-manage-653af.firebaseapp.com",
+    projectId: "queue-manage-653af",
+    storageBucket: "queue-manage-653af.firebasestorage.app",
+    messagingSenderId: "327457406558",
+    appId: "1:327457406558:web:c6d71a24bb7485e5e0fecf",
+    measurementId: "G-2XZP32T69P"
 };
 
 // Initialize Firebase
-let auth;
-let loginPage, appPage, loginForm, logoutBtn, signupLink;
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
 
-// Wait for Firebase to be available
-function initializeApp() {
-    try {
-        firebase.initializeApp(firebaseConfig);
-        auth = firebase.auth();
-        
-        // Get DOM elements
-        loginPage = document.getElementById('login-page');
-        appPage = document.getElementById('app-page');
-        loginForm = document.getElementById('login-form');
-        logoutBtn = document.getElementById('logout-btn');
-        signupLink = document.getElementById('signup-link');
-        
-        if (!loginForm) {
-            console.error('Login form not found!');
-            return;
+// Global State
+let html5QrCode = null;
+let scannerActive = false;
+
+// --- 1. Authentication & Redirection Guard ---
+auth.onAuthStateChanged((user) => {
+    const currentPage = window.location.pathname.split("/").pop();
+
+    if (user) {
+        if (currentPage === "login.html" || currentPage === "signup.html" || currentPage === "") {
+            window.location.href = 'welcome.html';
         }
-        
-        // Attach event listeners
-        loginForm.addEventListener('submit', handleLogin);
-        logoutBtn.addEventListener('click', handleLogout);
-        signupLink.addEventListener('click', handleSignupClick);
-        
-        // Check authentication status
-        checkLoginStatus();
-        
-        // Initialize Google Sign-In
-        initializeGoogleSignIn();
-        
-        console.log('App initialized successfully');
-    } catch (error) {
-        console.error('Initialization error:', error);
-    }
-}
-
-// --- Authentication System ---
-
-// Check authentication status
-function checkLoginStatus() {
-    auth.onAuthStateChanged((user) => {
-        if (user) {
-            // User is signed in
-            showApp();
-        } else {
-            // User is signed out
-            showLogin();
-        }
-    });
-}
-
-function showLogin() {
-    loginPage.style.display = 'flex';
-    appPage.style.display = 'none';
-}
-
-function showApp() {
-    loginPage.style.display = 'none';
-    appPage.style.display = 'block';
-    // Auto-start scanner after slight delay
-    setTimeout(() => {
-        initScanner();
-    }, 500);
-}
-
-// Handle email/password login
-async function handleLogin(e) {
-    e.preventDefault();
-    
-    const email = document.getElementById('email').value.trim();
-    const password = document.getElementById('password').value;
-
-    // Basic validation
-    if (!email || !password) {
-        alert('Please fill in email and password');
-        return;
-    }
-
-    try {
-        console.log('Attempting to sign in with:', email);
-        // Sign in with existing account only
-        const result = await auth.signInWithEmailAndPassword(email, password);
-        console.log('Sign in successful! User:', result.user.email);
-        
-        // Clear form
-        loginForm.reset();
-        
-        // Wait a moment then show app
-        setTimeout(() => {
-            showApp();
-        }, 500);
-        
-    } catch (error) {
-        console.error('Sign in error code:', error.code);
-        console.error('Sign in error message:', error.message);
-        
-        // Handle different error cases
-        if (error.code === 'auth/user-not-found') {
-            alert('Account not found. Please check your email and try again.');
-        } else if (error.code === 'auth/wrong-password') {
-            alert('Incorrect password. Please try again.');
-        } else if (error.code === 'auth/invalid-email') {
-            alert('Invalid email format.');
-        } else if (error.code === 'auth/too-many-requests') {
-            alert('Too many login attempts. Please try again later.');
-        } else if (error.code === 'auth/user-disabled') {
-            alert('This account has been disabled.');
-        } else {
-            alert('Error: ' + error.message);
+    } else {
+        if (currentPage === "qrscan.html" || currentPage === "welcome.html") {
+            window.location.href = 'login.html';
         }
     }
-}
+});
 
-// Handle logout
-async function handleLogout() {
-    stopScanner();
-    try {
-        await auth.signOut();
-        loginForm.reset();
-        showLogin();
-    } catch (error) {
-        console.error('Logout error:', error);
-        alert('Error logging out: ' + error.message);
-    }
-}
-
-// Handle signup link click
-function handleSignupClick() {
-    alert('Use the form above to create a new account. Fill in all fields and click Sign In.');
-}
-
-// Initialize Google Sign-In
-function initializeGoogleSignIn() {
-    try {
-        google.accounts.id.initialize({
-            client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com',
-            callback: handleGoogleSignIn
-        });
-
-        google.accounts.id.renderButton(
-            document.getElementById('google-signin-container'),
-            {
-                theme: 'filled_blue',
-                size: 'large',
-                width: 300,
-                text: 'signin_with'
-            }
-        );
-    } catch (error) {
-        console.error('Google Sign-In initialization error:', error);
-    }
-}
-
-// Handle Google Sign-In
+// --- 2. Google Sign-In Logic ---
 async function handleGoogleSignIn(response) {
     try {
-        // Decode JWT using the jwt-decode library
-        const userObject = jwt_decode(response.credential);
-        
-        // Sign in with Google token using Firebase
         const credential = firebase.auth.GoogleAuthProvider.credential(response.credential);
         await auth.signInWithCredential(credential);
+        window.location.href = 'welcome.html';
     } catch (error) {
         console.error('Google sign-in error:', error);
         alert('Error signing in with Google: ' + error.message);
     }
 }
 
-// Initialize on page load
-window.addEventListener('load', () => {
-    initializeApp();
-});
+function setupGoogleButton() {
+    const container = document.getElementById('google-signin-container');
+    if (!container) return;
 
-// Using jwt-decode library
-const jwt_decode = window.jwt_decode;
-
-// --- QR Scanner Setup ---
-let html5QrCode = null;
-let scanResultBox = null;
-let copyBtn = null;
-let lastScanResult = null;
-let scannerActive = false;
-
-// Initialize scanner elements
-function initScannerElements() {
-    if (!scanResultBox) scanResultBox = document.getElementById('scan-result');
-    if (!copyBtn) copyBtn = document.getElementById('copy-btn');
-}
-
-function onScanSuccess(decodedText, decodedResult) {
-    if (lastScanResult !== decodedText && scanResultBox) {
-        lastScanResult = decodedText;
-        scanResultBox.textContent = decodedText;
-        if (copyBtn) copyBtn.classList.remove('hidden');
-        
-        // Provide visual feedback
-        scanResultBox.style.borderColor = "var(--accent)";
-        setTimeout(() => {
-            scanResultBox.style.borderColor = "var(--border)";
-        }, 1000);
+    if (typeof google === 'undefined' || !google.accounts) {
+        setTimeout(setupGoogleButton, 500); 
+        return;
     }
-}
 
-function onScanFailure(error) {
-    // Ignore scan failures and keep scanning
-    // console.log("Scan attempt failed:", error);
-}
-
-async function checkCameraPermission() {
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: "environment" }
+        google.accounts.id.initialize({
+            client_id: 'YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com', 
+            callback: handleGoogleSignIn
         });
-        // Stop the stream immediately after checking
-        stream.getTracks().forEach(track => track.stop());
-        return true;
+
+        google.accounts.id.renderButton(
+            container,
+            { theme: 'filled_blue', size: 'large', width: 300 }
+        );
     } catch (error) {
-        console.error("Camera permission error:", error);
-        if (scanResultBox) {
-            if (error.name === 'NotAllowedError') {
-                scanResultBox.textContent = "❌ Camera access denied. Please allow camera permissions in browser settings.";
-            } else if (error.name === 'NotFoundError') {
-                scanResultBox.textContent = "❌ No camera device found. Please connect a camera.";
-            } else if (error.name === 'NotReadableError') {
-                scanResultBox.textContent = "❌ Camera is in use by another application. Please close it and try again.";
-            } else {
-                scanResultBox.textContent = "❌ Error accessing camera: " + error.message;
-            }
-        }
-        return false;
+        console.error('Google Button Error:', error);
     }
 }
 
-async function initScanner() {
-    if (scannerActive) {
-        console.log("Scanner already active");
-        return;
-    }
+// --- 3. Page Element Logic ---
+document.addEventListener('DOMContentLoaded', () => {
+    const loginForm = document.getElementById('login-form');
+    const signupForm = document.getElementById('signup-form');
+    const logoutBtn = document.getElementById('logout-btn');
+    const copyBtn = document.getElementById('copy-btn');
 
-    initScannerElements();
+    setupGoogleButton();
 
-    // Check if Html5Qrcode library is loaded
-    if (typeof Html5Qrcode === 'undefined') {
-        console.error("Html5Qrcode library not loaded!");
-        if (scanResultBox) {
-            scanResultBox.textContent = "❌ QR Code library not loaded. Please refresh the page.";
-        }
-        return;
-    }
-
-    // Verify reader element exists
-    const readerElement = document.getElementById('reader');
-    if (!readerElement) {
-        console.error("Reader element not found!");
-        if (scanResultBox) {
-            scanResultBox.textContent = "❌ Camera container not found. Please refresh the page.";
-        }
-        return;
-    }
-
-    // Check camera permission first
-    const hasPermission = await checkCameraPermission();
-    if (!hasPermission) {
-        return;
-    }
-
-    try {
-        if (!html5QrCode) {
-            html5QrCode = new Html5Qrcode("reader");
-        }
-
-        const config = {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            rememberLastUsedCamera: true,
-            aspectRatio: 1.0,
-            disableFlip: false
-        };
-
-        // Try to start scanner with environment camera, fall back to any camera
-        let scannerStarted = false;
-        try {
-            // First try: environment (rear) camera
-            console.log("Attempting to start scanner with environment camera...");
-            await html5QrCode.start(
-                { facingMode: "environment" },
-                config,
-                onScanSuccess,
-                onScanFailure
-            );
-            scannerStarted = true;
-        } catch (envErr) {
-            console.warn("Environment camera failed, trying user (front) camera:", envErr);
+    // Email/Password Login[cite: 4]
+    if (loginForm) {
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
             try {
-                // Second try: user (front) camera
-                await html5QrCode.start(
-                    { facingMode: "user" },
-                    config,
-                    onScanSuccess,
-                    onScanFailure
-                );
-                scannerStarted = true;
-            } catch (userErr) {
-                console.warn("User camera failed, trying any available camera:", userErr);
-                try {
-                    // Third try: any available camera without constraints
-                    await html5QrCode.start(
-                        { video: true },
-                        config,
-                        onScanSuccess,
-                        onScanFailure
-                    );
-                    scannerStarted = true;
-                } catch (anyErr) {
-                    throw anyErr;
-                }
+                await auth.signInWithEmailAndPassword(email, password);
+                window.location.href = 'welcome.html';
+            } catch (error) {
+                handleAuthError(error);
             }
-        }
-
-        if (scannerStarted) {
-            scannerActive = true;
-            console.log("QR Scanner started successfully");
-            if (scanResultBox) {
-                scanResultBox.textContent = "📷 Camera active - scan a QR code";
-                scanResultBox.style.borderColor = "var(--accent)";
-            }
-        }
-    } catch (err) {
-        console.error("Error starting scanner:", err);
-        console.error("Error name:", err.name);
-        console.error("Full error:", JSON.stringify(err));
-        scannerActive = false;
-        if (scanResultBox) {
-            if (err.toString().includes("Permission denied") || err.name === "NotAllowedError") {
-                scanResultBox.textContent = "❌ Camera permission required. Allow in browser settings.";
-            } else if (err.toString().includes("OverconstrainedError")) {
-                scanResultBox.textContent = "❌ Camera constraints not supported. Try another device or browser.";
-            } else if (err.name === "NotFoundError") {
-                scanResultBox.textContent = "❌ No camera found. Check hardware.";
-            } else if (err.name === "NotReadableError") {
-                scanResultBox.textContent = "❌ Camera busy. Close other apps using camera.";
-            } else {
-                scanResultBox.textContent = "❌ Error: " + (err.message || err.toString());
-            }
-        }
+        });
     }
-}
 
-function stopScanner() {
-    if (html5QrCode && scannerActive) {
-        html5QrCode.stop()
-            .then(() => {
-                html5QrCode.clear();
-                html5QrCode = null;
-                scannerActive = false;
-                console.log("QR Scanner stopped successfully");
-            })
-            .catch(error => {
-                console.error("Error stopping scanner:", error);
-                // Force cleanup
-                try {
-                    html5QrCode.clear();
-                    html5QrCode = null;
-                    scannerActive = false;
-                } catch (e) {
-                    console.error("Error during force cleanup:", e);
-                }
-            });
+    // Email/Password Signup[cite: 1, 3]
+    if (signupForm) {
+        signupForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('signup-email').value.trim();
+            const password = document.getElementById('signup-password').value;
 
-        lastScanResult = null;
-        if (scanResultBox) {
-            scanResultBox.textContent = "No result yet";
-            scanResultBox.style.borderColor = "var(--border)";
-        }
-        if (copyBtn) copyBtn.classList.add('hidden');
+            if (password.length < 6) {
+                alert('Password must be at least 6 characters.');
+                return;
+            }
+
+            try {
+                await auth.createUserWithEmailAndPassword(email, password);
+                alert('Account Created!');
+                window.location.href = 'welcome.html';
+            } catch (error) {
+                handleAuthError(error);
+            }
+        });
     }
-}
 
-// DOM Content Loaded
-document.addEventListener("DOMContentLoaded", () => {
-    // Initialize scanner elements
-    initScannerElements();
-    
-    // Setup copy button if it exists
+    // Logout Functionality[cite: 4]
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', async () => {
+            if (scannerActive) await stopScanner();
+            await auth.signOut();
+            window.location.href = 'login.html';
+        });
+    }
+
+    // Copy Result to Clipboard[cite: 4]
     if (copyBtn) {
         copyBtn.addEventListener('click', () => {
-            if (lastScanResult) {
-                navigator.clipboard.writeText(lastScanResult).then(() => {
+            const resultText = document.getElementById('scan-result').textContent;
+            if (resultText && !resultText.includes("No result")) {
+                navigator.clipboard.writeText(resultText).then(() => {
                     const originalText = copyBtn.textContent;
                     copyBtn.textContent = "✓ Copied!";
-                    copyBtn.style.background = "#059669";
-                    setTimeout(() => {
-                        copyBtn.textContent = originalText;
-                        copyBtn.style.background = "var(--accent)";
-                    }, 2000);
-                }).catch(err => {
-                    console.error("Copy error:", err);
+                    setTimeout(() => { copyBtn.textContent = originalText; }, 2000);
                 });
             }
         });
     }
+
+    // Auto-start scanner if on qrscan page[cite: 4]
+    if (window.location.pathname.includes('qrscan.html')) {
+        setTimeout(initScanner, 500);
+    }
 });
 
-// Handle page visibility changes to pause/resume scanner
-document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-        stopScanner();
-    } else if (appPage.style.display !== 'none') {
-        // Only restart if app is visible
-        setTimeout(() => {
-            initScanner();
-        }, 500);
+const resumeBtn = document.getElementById('resume-btn');
+// --- 4. QR Scanner Engine ---
+async function initScanner() {
+    const scanResultBox = document.getElementById('scan-result');
+    if (!scanResultBox || scannerActive) return;
+
+    try {
+        html5QrCode = new Html5Qrcode("reader");
+        const config = { 
+            fps: 15, // Higher FPS for smoother detection
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0 
+        };
+
+        await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+                // Success: Stop scanner and show results
+                stopScanner(); 
+                scanResultBox.textContent = "Redirecting to Kiosk...";
+                scanResultBox.classList.add('success-glow'); // Add a visual cue
+                
+                window.location.href = `service.html?kioskid=${encodeURIComponent(decodedText)}`;
+            },
+            (errorMessage) => {
+                // Optional: handle scan failures silently or log them
+            }
+        );
+        scannerActive = true;
+        scanResultBox.textContent = "📷 Positioning QR code...";
+    } catch (err) {
+        scanResultBox.textContent = "❌ Camera Error: " + err.message;
     }
+}
+
+// Logic for the Scan Again button
+if (resumeBtn) {
+    resumeBtn.addEventListener('click', () => {
+        document.getElementById('scan-result').textContent = "No result yet";
+        document.getElementById('scan-result').classList.remove('success-glow');
+        resumeBtn.classList.add('hidden');
+        document.getElementById('copy-btn').classList.add('hidden');
+        initScanner();
+    });
+}
+
+async function stopScanner() {
+    if (html5QrCode && scannerActive) {
+        await html5QrCode.stop();
+        html5QrCode.clear();
+        scannerActive = false;
+    }
+}
+
+// --- 5. Error Helper ---
+function handleAuthError(error) {
+    if (error.code === 'auth/user-not-found') alert('No account found with this email.');
+    else if (error.code === 'auth/wrong-password') alert('Incorrect password.');
+    else if (error.code === 'auth/email-already-in-use') alert('Email already registered.');
+    else alert('Error: ' + error.message);
+}
+
+// Pause/Resume scanner on tab switch
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) stopScanner();
+    else if (window.location.pathname.includes('qrscan.html')) initScanner();
 });
