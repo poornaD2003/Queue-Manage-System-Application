@@ -143,6 +143,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+const resumeBtn = document.getElementById('resume-btn');
 // --- 4. QR Scanner Engine ---
 async function initScanner() {
     const scanResultBox = document.getElementById('scan-result');
@@ -150,20 +151,43 @@ async function initScanner() {
 
     try {
         html5QrCode = new Html5Qrcode("reader");
+        const config = { 
+            fps: 15, // Higher FPS for smoother detection
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0 
+        };
+
         await html5QrCode.start(
             { facingMode: "environment" },
-            { fps: 10, qrbox: { width: 250, height: 250 } },
+            config,
             (decodedText) => {
-                scanResultBox.textContent = decodedText;
-                document.getElementById('copy-btn').classList.remove('hidden');
+                // Success: Stop scanner and show results
+                stopScanner(); 
+                scanResultBox.textContent = "Redirecting to Kiosk...";
+                scanResultBox.classList.add('success-glow'); // Add a visual cue
+                
+                window.location.href = `service.html?kioskid=${encodeURIComponent(decodedText)}`;
             },
-            () => {} 
+            (errorMessage) => {
+                // Optional: handle scan failures silently or log them
+            }
         );
         scannerActive = true;
-        scanResultBox.textContent = "📷 Camera active";
+        scanResultBox.textContent = "📷 Positioning QR code...";
     } catch (err) {
         scanResultBox.textContent = "❌ Camera Error: " + err.message;
     }
+}
+
+// Logic for the Scan Again button
+if (resumeBtn) {
+    resumeBtn.addEventListener('click', () => {
+        document.getElementById('scan-result').textContent = "No result yet";
+        document.getElementById('scan-result').classList.remove('success-glow');
+        resumeBtn.classList.add('hidden');
+        document.getElementById('copy-btn').classList.add('hidden');
+        initScanner();
+    });
 }
 
 async function stopScanner() {
